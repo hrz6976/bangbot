@@ -18,7 +18,7 @@ def get_api_version():
     return res
 
 
-def exec(cmdline):
+def execute(cmdline):
     cmd_string = 'adb shell ' + cmdline
     return subprocess.check_output(cmd_string.split()).decode('utf-8')
 

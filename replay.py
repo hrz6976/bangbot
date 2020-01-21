@@ -1,13 +1,13 @@
 import subprocess
-from utils import find_touchscreen, push, exec
+from utils import find_touchscreen, push, execute
 
 
 def replay(exe_local_path, trace_local_path, exe_remote_path, trace_remote_path):
 	touch_screen_event = find_touchscreen()
-	exec('cd ' + '/data/local/tmp/')
+	execute('cd ' + '/data/local/tmp/')
 	push(exe_local_path, exe_remote_path)
 	push(trace_local_path, trace_remote_path, force=True)
-	exec('chmod +x ' + exe_remote_path)  # 'Permission denied'
+	execute('chmod +x ' + exe_remote_path)  # 'Permission denied'
 	cmd_string = 'adb shell ' + exe_remote_path + ' ' + touch_screen_event + ' ' + trace_remote_path
 	process = subprocess.Popen(cmd_string.split(), stdout=subprocess.STDOUT)
 	input('Press Enter to stop')
