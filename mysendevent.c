@@ -1,4 +1,5 @@
 //[12f23eddde] 20-01-23 a better timer
+//[12f23eddde] 20-01-23 add time offset
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@ struct input_event {
 };
 
 #define MICROSEC 1000000
+#define TRUNC(x) ( x > 0 ? x : 0 ) // avoid uint overflow
 
 #define EVIOCGVERSION		_IOR('E', 0x01, int)			/* get driver version */
 #define EVIOCGID		_IOR('E', 0x02, struct input_id)	/* get device ID */
@@ -73,9 +75,11 @@ int main(int argc, char *argv[])
     int version;
     struct input_event event;
     struct timeval tv;
+    long offset = 0;
+    int act_cnt = 0;
 
-    if(argc != 3) {
-        fprintf(stderr, "use: %s input_device input_events\n", argv[0]);
+    if(argc != 3 && argc != 4) {
+        fprintf(stderr, "usage: %s input_device input_events offset\n", argv[0]);
         return 1;
     }
 
@@ -95,6 +99,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    if (strlen(argv[3])!=0) offset = strtol(argv[3], NULL, 10);
+    printf("[mysendevent] trace=%s offset=%ld(ms)\n",argv[1],offset);
+
     char line[128];
     unsigned int sleep_time;
     double timestamp_init = -1.0;
@@ -103,6 +110,10 @@ int main(int argc, char *argv[])
     char type[32];
     char code[32];
     char value[32];
+
+    // future
+    // read(fd, &event, sizeof(event));
+    // printf("Got input from %s\n",argv[1]);
 
     while (fgets(line, sizeof(line), fd_in) != NULL) {
         // remove the characters [ and ] surrounding the timestamp
@@ -118,19 +129,26 @@ int main(int argc, char *argv[])
         if(timestamp_init != -1.0)
         {
             // In order to playback the same gestures the code sleeps accordingly to the timestamps from the inputed recording
-            sleep_time = (unsigned int) ((timestamp_now - timestamp_init) * MICROSEC - (get_usec(&tv) - usec_init));  // more accurate
-            //printf("sleep_time = (%lf-%lf) - (%lld - %lld) = %u (us)\n",timestamp_now,timestamp_init,get_usec(&tv),usec_init,sleep_time);
+            long long usec_now = get_usec(&tv);
+            long long sleep_time_fixed = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init) + offset*1000;
+            sleep_time = TRUNC(sleep_time_fixed);  // more accurate
+            if(sleep_time!=0){
+                printf("[%4d] sleep_time = (%lf-%lf)*1000000 - (%lld - %lld) + %ld*1000 = %u (us)\n",
+                        act_cnt,timestamp_now,timestamp_init,usec_now,usec_init, offset, sleep_time);
+                act_cnt++;  // update val
+            }
             // we don't care about the value of a single event's timestamp but the difference between two sequential events
             usleep(sleep_time); // sleep_time is in MICROSECONDS
         }
 
-        // moved to here
+        // write event
         ret = write(fd, &event, sizeof(event));
         if(ret < sizeof(event)) {
             fprintf(stderr, "write event failed, %s\n", strerror(errno));
             return -1;
         }
 
+        // set init val
         if(usec_init == -1){
             usec_init = get_usec(&tv);
         }
