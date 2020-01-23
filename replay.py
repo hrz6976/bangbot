@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 from utils import find_touchscreen, push, execute_adb_shell, get_api_version
 from exec_cmd import execute_intercept, execute_background
 
@@ -9,7 +10,7 @@ from exec_cmd import execute_intercept, execute_background
 #   background: run in detached thread: would not block I/O, kill with kill -9
 #   offset: add an offset(ms) to mysendevent actions (-280~-180 seems nice on S6E)
 #   delay: (used in record()) delay(s) before executing mysendevent
-def replay(trace, background=False, offset=0, delay=0):
+def replay(trace, background=False, offset=0, delay=0, release_timeout=0.2):
 	# args
 	exe_local_path = 'mysendevent-arm64'
 	exe_remote_path = '/data/local/tmp/mysendevent-arm64'
@@ -24,7 +25,8 @@ def replay(trace, background=False, offset=0, delay=0):
 	if get_api_version() < 23:
 		cmd_string = 'adb shell ' + exe_remote_path + ' ' + touch_screen_event + ' ' + trace_remote_path + ' ' + str(offset)
 	else:
-		cmd_string = 'adb exec-out ' + exe_remote_path + ' ' + touch_screen_event + ' ' + trace_remote_path + ' ' + str(offset)
+		cmd_string = 'adb exec-out ' + exe_remote_path + ' ' + touch_screen_event + ' ' + trace_remote_path + ' '\
+					+ str(offset) + ' ' + str(release_timeout)
 	if background:
 		execute_background(cmd_string, delay=delay, outfile=sys.stdout)
 	else:
@@ -32,6 +34,14 @@ def replay(trace, background=False, offset=0, delay=0):
 
 
 if __name__ == '__main__':
+	#  parsing arguments
+	parser = argparse.ArgumentParser(description="bandori chart replay")
+	parser.add_argument('-t', '--trace', action="store", default="", help="path of tracefile")
+	parser.add_argument('-o', '--offset', action="store", default="0", help="action offset(ms)")
+	parser.add_argum4ent('-d', '--delay', action="store", default="3", help="delay before sendevent(s)")
+	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")
+	option = parser.parse_args()
 	# compile mysendevent
-	os.system('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64')
-	replay('trace_01_b.txt', offset=-220)
+	# os.system('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64')
+	print('Delaying', option.delay, 'sec')
+	replay(option.trace, offset=int(option.offset), delay=int(option.delay))

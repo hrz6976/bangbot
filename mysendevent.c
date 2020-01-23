@@ -1,5 +1,6 @@
 //[12f23eddde] 20-01-23 a better timer
 //[12f23eddde] 20-01-23 add time offset
+//[12f23eddde] 20-01-23 touch-sync
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,15 @@ struct input_event {
     __u16 code;
     __u32 value;
 };
+
+#define NDEBUG  // debug switch
+
+// dbg_printf() using c99 marco
+#ifndef NDEBUG
+    # define dbg_printf(...) printf(__VA_ARGS__)
+#else
+    # define dbg_printf(...)
+#endif
 
 #define MICROSEC 1000000
 #define TRUNC(x) ( x > 0 ? x : 0 ) // avoid uint overflow
@@ -73,13 +83,15 @@ int main(int argc, char *argv[])
     int fd;
     int ret;
     int version;
+
+    // Modified
     struct input_event event;
     struct timeval tv;
-    long offset = 0;
-    int act_cnt = 0;
+    long offset;
+    float release_timeout;
 
-    if(argc != 3 && argc != 4) {
-        fprintf(stderr, "usage: %s input_device input_events offset\n", argv[0]);
+    if(argc != 5) {
+        fprintf(stderr, "usage: %s input_device input_events offset release_timeout\n", argv[0]);
         return 1;
     }
 
@@ -99,21 +111,29 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (strlen(argv[3])!=0) offset = strtol(argv[3], NULL, 10);
-    printf("[mysendevent] trace=%s offset=%ld(ms)\n",argv[1],offset);
+    offset = strtol(argv[3], NULL, 10);
+    release_timeout = strtof(argv[4], NULL);
+    printf("[mysendevent] trace=%s offset=%ld(ms) release_timeout=%.2f(s)\n",argv[2],offset,release_timeout);
+    printf("[mysendevent] Waiting for touch event\n");
 
     char line[128];
-    unsigned int sleep_time;
-    double timestamp_init = -1.0;
-    double timestamp_now;
-    long long usec_init = -1;
     char type[32];
     char code[32];
     char value[32];
 
-    // future
-    // read(fd, &event, sizeof(event));
-    // printf("Got input from %s\n",argv[1]);
+    // Modified
+    unsigned int sleep_time;
+    double timestamp_init = -1.0;
+    double timestamp_prev_release = -1.0;
+    double timestamp_now;
+    long long usec_init = -1;
+    int act_cnt = 0;
+    int is_release = 0;
+    int is_first_act = 1;
+
+    // received input from touchscreen -> continue
+    read(fd, &event, sizeof(event));
+    printf("[mysendevent] Got touch event from %s, waiting for 1st release\n",argv[1]);
 
     while (fgets(line, sizeof(line), fd_in) != NULL) {
         // remove the characters [ and ] surrounding the timestamp
@@ -121,36 +141,52 @@ int main(int argc, char *argv[])
         sscanf(line, "%lf %s %s %s", &timestamp_now, type, code, value);
 
         // write the event to the appropriate input device
-        memset(&event, 0, sizeof(event));
         event.type = (int) strtol(type, NULL, 16);
         event.code = (int) strtol(code, NULL, 16);
         event.value = (uint32_t) strtoll(value, NULL, 16);
 
         if(timestamp_init != -1.0)
         {
-            // In order to playback the same gestures the code sleeps accordingly to the timestamps from the inputed recording
             long long usec_now = get_usec(&tv);
-            long long sleep_time_fixed = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init) + offset*1000;
+            long long sleep_time_fixed = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
             sleep_time = TRUNC(sleep_time_fixed);  // more accurate
-            if(sleep_time!=0){
-                printf("[%4d] sleep_time = (%lf-%lf)*1000000 - (%lld - %lld) + %ld*1000 = %u (us)\n",
-                        act_cnt,timestamp_now,timestamp_init,usec_now,usec_init, offset, sleep_time);
-                act_cnt++;  // update val
-            }
-            // we don't care about the value of a single event's timestamp but the difference between two sequential events
-            usleep(sleep_time); // sleep_time is in MICROSECONDS
-        }
 
-        // write event
-        ret = write(fd, &event, sizeof(event));
-        if(ret < sizeof(event)) {
-            fprintf(stderr, "write event failed, %s\n", strerror(errno));
-            return -1;
+            if(event.value == (uint32_t)-1) is_release = 1;
+            else is_release = 0;
+
+            if(sleep_time!=0){
+//                dbg_printf("[%4d] sleep_time = (%lf-%lf)*1000000 - (%lld - %lld) = %u (us)\n",
+//                        act_cnt,timestamp_now,timestamp_init,usec_now,usec_init,sleep_time);
+                usleep(sleep_time); // sleep (us)
+
+                if(is_release){
+                    dbg_printf("[%4d] %6.3fs:release\n", act_cnt, timestamp_now-timestamp_init);
+                    act_cnt++;
+                    is_release = 0;
+                    timestamp_prev_release = timestamp_now;
+                }
+            }
+
+            // write event when:
+            // not first note
+            // > release_timeout from last release
+            if(is_first_act && act_cnt > 0 && timestamp_prev_release!=-1.0 && timestamp_now - timestamp_prev_release > release_timeout){
+                printf("[mysendevent] Sendevent begin, press ENTER to stop\n");
+                is_first_act = 0;
+            }
+
+            if(!is_first_act){
+                ret = write(fd, &event, sizeof(event));
+                if(ret < sizeof(event)) {
+                    fprintf(stderr, "write event failed, %s\n", strerror(errno));
+                    return -1;
+                }
+            }
         }
 
         // set init val
         if(usec_init == -1){
-            usec_init = get_usec(&tv);
+            usec_init = get_usec(&tv) + 1000*offset;  // add offset
         }
         if(timestamp_init == -1.0){
             timestamp_init = timestamp_now;
@@ -162,6 +198,8 @@ int main(int argc, char *argv[])
         memset(code, 0, sizeof(code));
         memset(value, 0, sizeof(value));
     }
+
+    printf("[mysendevent] Sendevent stopped normally\n");
 
     fclose(fd_in);
     close(fd);

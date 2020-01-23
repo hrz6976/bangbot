@@ -4,7 +4,7 @@ import threading
 import logging
 
 _res_string = ''  # Safe: 1 worker writes to it at the same time
-logging.basicConfig(level=logging.DEBUG)  # change DEBUG to WARNING if not debugging
+logging.basicConfig(level=logging.WARNING)  # change DEBUG to WARNING if not debugging
 
 
 #   stop_activated: thread event val
@@ -26,20 +26,20 @@ def _worker(stop_activated, cmd_string, outfile=None, delay=0):
 			process.terminate()
 			time.sleep(0.5)
 			if process.poll() is None:
-				logging.warning("Thread failed to terminate. Using SIGKILL")
+				logging.warning("[exec_cmd] Thread failed to terminate. Using SIGKILL")
 				process.kill()
 			if outfile is None:
 				global _res_string
 				_res_string = process.stdout.read().decode('utf-8')
 			return
-	logging.debug('\n' + cmd_string + ' stopped normally')
+	logging.debug('\n[exec_cmd] ' + cmd_string + ' stopped normally')
 
 
 #   listen for ENTER then set thread event
 #   ENTER might not be captured when logging level set to DEBUG: try ENTER again
 def _keypress_listener(stop_activated):
-	input("Press ENTER to stop")
-	print("ENTER intercepted")
+	input()
+	print("[keypress_listener] ENTER caught")
 	stop_activated.set()
 
 
