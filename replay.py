@@ -23,10 +23,11 @@ def replay(trace, background=False, offset=0, delay=0, release_timeout=0.2):
 	push(trace_local_path, trace_remote_path, force=True)
 	execute_adb_shell('chmod +x ' + exe_remote_path)  # 'Permission denied'
 	if get_api_version() < 23:
-		cmd_string = 'adb shell ' + exe_remote_path + ' ' + touch_screen_event + ' ' + trace_remote_path + ' ' + str(offset)
+		cmd_string = 'adb shell ' + exe_remote_path + ' -e ' + touch_screen_event + ' -t ' + trace_remote_path + \
+					' -o ' + str(offset) + ' -r ' + str(release_timeout) + ' -w '
 	else:
-		cmd_string = 'adb exec-out ' + exe_remote_path + ' ' + touch_screen_event + ' ' + trace_remote_path + ' '\
-					+ str(offset) + ' ' + str(release_timeout)
+		cmd_string = 'adb exec-out ' + exe_remote_path + ' -e ' + touch_screen_event + ' -t ' + trace_remote_path + \
+					' -o ' + str(offset) + ' -r ' + str(release_timeout) + ' -w '
 	if background:
 		execute_background(cmd_string, delay=delay, outfile=sys.stdout)
 	else:
@@ -38,10 +39,10 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="bandori chart replay")
 	parser.add_argument('-t', '--trace', action="store", default="", help="path of tracefile")
 	parser.add_argument('-o', '--offset', action="store", default="0", help="action offset(ms)")
-	parser.add_argum4ent('-d', '--delay', action="store", default="3", help="delay before sendevent(s)")
+	parser.add_argument('-d', '--delay', action="store", default="3", help="delay before sendevent(s)")
 	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")
 	option = parser.parse_args()
 	# compile mysendevent
-	# os.system('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64')
+	os.system('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64')
 	print('Delaying', option.delay, 'sec')
 	replay(option.trace, offset=int(option.offset), delay=int(option.delay))
