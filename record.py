@@ -1,9 +1,8 @@
 import logging
-import os
 import argparse
 from utils import find_touchscreen, get_api_version
 from exec_cmd import execute_intercept
-from replay import replay
+from adbhelper import keep_device_connected
 
 
 #   outfile=None: return result(str)
@@ -26,8 +25,13 @@ if __name__ == '__main__':
 	#  parsing arguments
 	parser = argparse.ArgumentParser(description="bandori chart record")
 	parser.add_argument('-t', '--trace', action="store", default="", help="path of tracefile")
+	parser.add_argument('-n', '--name', action="store", default="", help="device name (shown in adb)")
 	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")
 	option = parser.parse_args()
+
+	# keep adb happy
+	if option.name != '':
+		keep_device_connected(option.name)
 
 	with open(option.trace, 'w') as f:
 		print('Press ENTER, then start playing DIRECTLY')

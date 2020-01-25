@@ -21,9 +21,11 @@ def get_api_version():
 
 
 #   execute adb shell command, return result(str)
-def execute_adb_shell(cmdline):
-    cmd_string = 'adb shell ' + cmdline
-    return subprocess.check_output(cmd_string.split()).decode('utf-8')
+def execute_command(cmd_string, print_to_stdout=False):
+    if print_to_stdout is False:
+        return subprocess.check_output(cmd_string.split()).decode('utf-8')
+    else:
+        subprocess.call(cmd_string.split())
 
 
 #   local_path, remote_path include filename

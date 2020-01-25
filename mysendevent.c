@@ -2,6 +2,8 @@
 //[12f23eddde] 20-01-23 add time offset
 //[12f23eddde] 20-01-23 touch-sync
 //[12f23eddde] 20-01-24 add argprase
+//[12f23eddde] 20-01-25 update start cond with press/release
+//[12f23eddde] 20-01-25 time correction based on release time
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +33,8 @@ struct input_event {
 
 #define MICROSEC 1000000
 #define TRUNC(x) ( x > 0 ? x : 0 ) // avoid uint overflow
+
+// begin <linux/input.h>
 
 #define EVIOCGVERSION		_IOR('E', 0x01, int)			/* get driver version */
 #define EVIOCGID		_IOR('E', 0x02, struct input_id)	/* get device ID */
@@ -156,9 +160,12 @@ int main(int argc, char *argv[])
     double timestamp_prev_release = -1.0;
     double timestamp_now;
     long long usec_init = -1;
-    int act_cnt = 0;
-    int is_release = 0;
-    int is_first_act = 1;
+    int press_cnt = 0;
+    int release_cnt = 0;
+    bool is_press = false;
+    bool is_release = false;
+    bool is_first_act = true;
+    long long corr_offset_sum = 0;
 
     if(wait_for_input){
         printf("[mysendevent] Waiting for touch event\n");
@@ -167,7 +174,7 @@ int main(int argc, char *argv[])
         printf("[mysendevent] Got touch event, waiting for 1st release\n");
     }else{
         // disable some features
-        is_first_act = 0;
+        is_first_act = false;
     }
 
     while (fgets(line, sizeof(line), fd_in) != NULL) {
@@ -180,51 +187,78 @@ int main(int argc, char *argv[])
         event.code = (int) strtol(code, NULL, 16);
         event.value = (uint32_t) strtoll(value, NULL, 16);
 
-        if(timestamp_init != -1.0)
-        {
-            long long usec_now = get_usec(&tv);
-            long long sleep_time_fixed = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
-            sleep_time = TRUNC(sleep_time_fixed);  // more accurate
-
-            if(event.value == (uint32_t)-1) is_release = 1;
-            else is_release = 0;
-
-            if(sleep_time!=0){
-                if(debug) printf("[%4d] sleep_time = (%lf-%lf)*1000000 - (%lld - %lld) = %u (us)\n",
-                        act_cnt,timestamp_now,timestamp_init,usec_now,usec_init,sleep_time);
-                usleep(sleep_time); // sleep (us)
-
-                if(is_release){
-                    if(debug) printf("[%4d] %6.3fs:release\n", act_cnt, timestamp_now-timestamp_init);
-                    act_cnt++;
-                    is_release = 0;
-                    timestamp_prev_release = timestamp_now;
-                }
+        // press/release code val: 0x0039
+        // release event val: 0xffffffff
+        // might be device-dependent?
+        if(event.code == (int) 0x0039) {
+            if (event.value == (uint32_t) 0xffffffff) {
+                is_release = true;
+                release_cnt++;
             }
-
-            // write event when:
-            // not first note
-            // > release_timeout from last release
-            if(is_first_act && act_cnt > 0 && timestamp_prev_release!=-1.0 && timestamp_now - timestamp_prev_release > release_timeout){
-                printf("[mysendevent] Sendevent begin, press ENTER to stop\n");
-                is_first_act = 0;
-            }
-
-            if(!is_first_act){
-                ret = write(fd, &event, sizeof(event));
-                if(ret < sizeof(event)) {
-                    fprintf(stderr, "write event failed, %s\n", strerror(errno));
-                    return -1;
-                }
+            else{
+                is_press = true;
+                press_cnt++;
             }
         }
+
+        long long usec_now = get_usec(&tv);
+        long long sleep_time_fixed = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
+        sleep_time = TRUNC(sleep_time_fixed);  // more accurate
 
         // set init val
         if(usec_init == -1){
-            usec_init = get_usec(&tv) + 1000 * offset;  // add offset
+            usec_init = usec_now;
         }
         if(timestamp_init == -1.0){
             timestamp_init = timestamp_now;
+        }
+
+        if(sleep_time!=0){
+            //if(debug) printf("[%4d] sleep_time = (%lf-%lf)*1000000 - (%lld - %lld) = %u (us)\n",
+                             //release_cnt,timestamp_now,timestamp_init,usec_now,usec_init,sleep_time);
+            usleep(sleep_time); // sleep (us)
+
+            if(is_press){
+                if(debug) printf("[%4d] %lf: press_cnt=%d, release_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
+                is_press = false;
+            }
+
+            if(is_release){
+                if(debug) printf("[%4d] %lf: release_cnt=%d, press_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
+                // set timestamp on 1st release
+                timestamp_prev_release = timestamp_now;
+                if(!is_first_act) is_release = false;  //reset later
+            }
+
+            // set is_first_act = false when:
+            // flushing IO
+            // not first release
+            // > release_timeout from last release
+            // press_cnt == release_cnt
+            if(is_first_act && release_cnt > 0 && timestamp_prev_release!=-1.0
+               && timestamp_now - timestamp_prev_release > release_timeout && press_cnt == release_cnt){
+                printf("[mysendevent] Sendevent begin, press ENTER to stop\n");
+                is_first_act = false;
+                // time correction
+                long long offset_final = 1000*offset - corr_offset_sum/release_cnt;
+                if(debug) printf("[%4d] %lf: offset_final=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,offset_final);
+                usec_init += offset_final;
+            }
+        }
+
+        if(!is_first_act){
+            ret = write(fd, &event, sizeof(event));
+            if(ret < sizeof(event)) {
+                fprintf(stderr, "write event failed, %s\n", strerror(errno));
+                return -1;
+            }
+        }else if(is_release){  // time correction: only press/release time is reliable
+            read(fd, &event, sizeof(event));
+            usec_now = get_usec(&tv);
+            long long corr_offset = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
+            if(debug) printf("[%4d] %lf: corr_offset=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,corr_offset);
+            corr_offset_sum += corr_offset;
+            is_release = false;
         }
 
         // Clear temporary buffers
