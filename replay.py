@@ -48,7 +48,7 @@ if __name__ == '__main__':
 	option = parser.parse_args()
 
 	# compile mysendevent
-	execute_command('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64', print_to_stdout=True)
+	# execute_command('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64', print_to_stdout=True)
 
 	# keep adb happy
 	if option.name != '':
