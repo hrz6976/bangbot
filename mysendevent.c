@@ -89,12 +89,13 @@ int main(int argc, char *argv[])
     struct timeval tv;
     long offset = 0;
     float release_timeout = 0.2;
+    char manufacturer = 'u';
     FILE *fd_in = NULL;
 
     // parsing arguments
     printf("[mysendevent]");
     int c;
-    while ((c = getopt (argc, argv, "t:e:o:r:hwv")) != -1) {
+    while ((c = getopt (argc, argv, "t:e:o:r:m:hwv")) != -1) {
         switch (c) {
             case 't':  // trace
                 fd_in = fopen(optarg, "r");
@@ -111,6 +112,9 @@ int main(int argc, char *argv[])
             case 'r':  // release_timeout
                 release_timeout = strtof(optarg, NULL);
                 printf(" release_timeout=%.2f(ms)",release_timeout);
+                break;
+            case 'm':  // manufacturer
+                manufacturer = optarg[0];
                 break;
             case 'w':  // wait_for_input
                 wait_for_input = true;
@@ -187,23 +191,43 @@ int main(int argc, char *argv[])
         event.code = (int) strtol(code, NULL, 16);
         event.value = (uint32_t) strtoll(value, NULL, 16);
 
-        // press/release code val: 0x0039
-        // release event val: 0xffffffff
-        // might be device-dependent?
-        if(event.code == (int) 0x0039) {
-            if (event.value == (uint32_t) 0xffffffff) {
-                is_release = true;
-                release_cnt++;
-            }
-            else{
-                is_press = true;
-                press_cnt++;
-            }
-        }
-
         long long usec_now = get_usec(&tv);
         long long sleep_time_fixed = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
         sleep_time = TRUNC(sleep_time_fixed);  // more accurate
+
+        if(manufacturer == 'u') {
+            // universal
+            // press/release code val: 0x0039
+            // release event val: 0xffffffff
+            if (event.code == (int) 0x0039) {
+                if (event.value == (uint32_t) 0xffffffff) {
+                    is_release = true;
+                    release_cnt++;
+                    // set timestamp on 1st release
+                    timestamp_prev_release = timestamp_now;
+                } else {
+                    is_press = true;
+                    press_cnt++;
+                }
+            }
+        } else if (manufacturer == 'h') {
+            // huawei
+            // can not use 0x0039 to determine press/release
+            if (event.code == (int) 0x0039) {
+                timestamp_prev_release = timestamp_now;
+            }
+            if (event.code == (int) 0x014a) {
+                if(event.value == (uint32_t) 0x00000001) {
+                    is_release = true;
+                    release_cnt++;
+                    // set timestamp on 1st release
+                    timestamp_prev_release = timestamp_now;
+                }else{
+                    is_press = true;
+                    press_cnt++;
+                }
+            }
+        }
 
         // set init val
         if(usec_init == -1){
@@ -215,7 +239,7 @@ int main(int argc, char *argv[])
 
         if(sleep_time!=0){
             //if(debug) printf("[%4d] sleep_time = (%lf-%lf)*1000000 - (%lld - %lld) = %u (us)\n",
-                             //release_cnt,timestamp_now,timestamp_init,usec_now,usec_init,sleep_time);
+            //release_cnt,timestamp_now,timestamp_init,usec_now,usec_init,sleep_time);
             usleep(sleep_time); // sleep (us)
 
             if(is_press){
@@ -225,8 +249,6 @@ int main(int argc, char *argv[])
 
             if(is_release){
                 if(debug) printf("[%4d] %lf: release_cnt=%d, press_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
-                // set timestamp on 1st release
-                timestamp_prev_release = timestamp_now;
                 if(!is_first_act) is_release = false;  //reset later
             }
 

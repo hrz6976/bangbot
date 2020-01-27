@@ -28,6 +28,8 @@ def replay(trace, background=False, offset=0, delay=0, release_timeout=0.09):
 	else:
 		cmd_string = 'adb exec-out ' + exe_remote_path + ' -e ' + touch_screen_event + ' -t ' + trace_remote_path + \
 					' -o ' + str(offset) + ' -r ' + str(release_timeout) + ' -w '
+	if option.huawei:
+		cmd_string += ' -m h '
 	if option.debug:
 		cmd_string += ' -v '
 	if background:
@@ -44,6 +46,7 @@ if __name__ == '__main__':
 	parser.add_argument('-d', '--delay', action="store", default="3", help="delay before sendevent(s)")
 	parser.add_argument('-n', '--name', action="store", default="", help="device name (shown in adb)")
 	parser.add_argument('-r', '--release_timeout', action="store", default="0.09", help="release timeout for mysendevent")
+	parser.add_argument('--huawei', action="store_true", default=False, help="add support for Huawei devices")
 	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")
 	option = parser.parse_args()
 
