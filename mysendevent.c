@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
             // huawei
             // can not use 0x0039 to determine press/release
             if (event.code == (int) 0x014a) {
-                if(event.value == (uint32_t) 0x00000001) {
+                if(event.value == (uint32_t) 0x00000000) {
                     is_release = true;
                 }else{
                     is_press = true;
@@ -249,9 +249,13 @@ int main(int argc, char *argv[])
                 usec_init += offset_final;
             }
 
-            // if(is_first_act && debug && press_cnt == release_cnt) {
-            //     printf("[%4d] interval = %lf \n",(press_cnt+release_cnt+1)/2, timestamp_now-timestamp_prev_release);
-            // }
+            if (is_first_act && is_release){  // time correction: only press/release time is reliable
+                read(fd, &event, sizeof(event));
+                usec_now = get_usec(&tv);
+                long long corr_offset = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
+                if(debug) printf("[%4d] %lf: corr_offset=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,corr_offset);
+                corr_offset_sum += corr_offset;
+            }
 
             // update later to avoid cond error (Huawei devices)
             if(is_press){
@@ -263,25 +267,18 @@ int main(int argc, char *argv[])
             if(is_release){
                 release_cnt++;
                 if(debug) printf("[%4d] %lf: release_cnt=%d, press_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
-                if(!is_first_act) is_release = false;  //reset later
+                is_release = false;  //reset later
                 // set timestamp on 1st release
                 timestamp_prev_release = timestamp_now;
             }
         }
 
-        if(!is_first_act){
+        if(!is_first_act) {
             ret = write(fd, &event, sizeof(event));
-            if(ret < sizeof(event)) {
+            if (ret < sizeof(event)) {
                 fprintf(stderr, "write event failed, %s\n", strerror(errno));
                 return -1;
             }
-        }else if(is_release){  // time correction: only press/release time is reliable
-            read(fd, &event, sizeof(event));
-            usec_now = get_usec(&tv);
-            long long corr_offset = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
-            if(debug) printf("[%4d] %lf: corr_offset=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,corr_offset);
-            corr_offset_sum += corr_offset;
-            is_release = false;
         }
 
         // Clear temporary buffers
