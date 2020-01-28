@@ -17,7 +17,11 @@ def replay(trace, background=False, offset=0, delay=0, release_timeout=0.09):
 	trace_local_path = trace
 	trace_remote_path = '/data/local/tmp/' + trace
 
-	touch_screen_event = find_touchscreen()
+	if option.event == "":
+		touch_screen_event = find_touchscreen()
+	else:
+		touch_screen_event = option.event
+
 	execute_command('adb shell ' + 'cd ' + '/data/local/tmp/')
 	push(exe_local_path, exe_remote_path, force=True)
 	push(trace_local_path, trace_remote_path, force=True)
@@ -45,6 +49,7 @@ if __name__ == '__main__':
 	parser.add_argument('-o', '--offset', action="store", default="0", help="action offset(ms)")
 	parser.add_argument('-d', '--delay', action="store", default="3", help="delay before sendevent(s)")
 	parser.add_argument('-n', '--name', action="store", default="", help="device name (shown in adb)")
+	parser.add_argument('-e', '--event', action="store", default="", help="touch screen event")
 	parser.add_argument('-r', '--release_timeout', action="store", default="0.09", help="release timeout for mysendevent")
 	parser.add_argument('--huawei', action="store_true", default=False, help="add support for Huawei devices")
 	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")

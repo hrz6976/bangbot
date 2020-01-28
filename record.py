@@ -9,7 +9,10 @@ from adbhelper import keep_device_connected
 #   outfile=f: (i.e. sys.stdout) send output to f, result =''
 def record(outfile=None):
 	# Try to solve tap missing issue: use exec-out on higher level api
-	touch_screen_event = find_touchscreen()
+	if option.event == "":
+		touch_screen_event = find_touchscreen()
+	else:
+		touch_screen_event = option.event
 	logging.debug('Found touchscreen: ' + touch_screen_event)
 	if get_api_version() < 23:
 		cmd_string = 'adb shell getevent -t ' + touch_screen_event
@@ -26,6 +29,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="bandori chart record")
 	parser.add_argument('-t', '--trace', action="store", default="", help="path of tracefile")
 	parser.add_argument('-n', '--name', action="store", default="", help="device name (shown in adb)")
+	parser.add_argument('-e', '--event', action="store", default="", help="touch screen event")
 	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")
 	option = parser.parse_args()
 
