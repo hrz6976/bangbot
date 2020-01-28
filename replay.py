@@ -33,7 +33,7 @@ def replay(trace, background=False, offset=0, delay=0, release_timeout=0.09):
 		cmd_string = 'adb exec-out ' + exe_remote_path + ' -e ' + touch_screen_event + ' -t ' + trace_remote_path + \
 					' -o ' + str(offset) + ' -r ' + str(release_timeout) + ' -w '
 	if option.huawei:
-		cmd_string += ' -m h '
+		cmd_string += ' -m huawei '
 	if option.debug:
 		cmd_string += ' -v '
 	if background:
@@ -53,10 +53,12 @@ if __name__ == '__main__':
 	parser.add_argument('-r', '--release_timeout', action="store", default="0.09", help="release timeout for mysendevent")
 	parser.add_argument('--huawei', action="store_true", default=False, help="add support for Huawei devices")
 	parser.add_argument('--debug', action="store_true", default=False, help="show verbose details")
+	parser.add_argument('--compile', action="store_true", default=False, help="compile mysendevent (dev)")
 	option = parser.parse_args()
 
 	# compile mysendevent
-	# execute_command('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64', print_to_stdout=True)
+	if option.compile:
+		execute_command('../../../Desktop/toolchain/bin/aarch64-linux-android-gcc --static mysendevent.c -o mysendevent-arm64', print_to_stdout=True)
 
 	# keep adb happy
 	if option.name != '':
