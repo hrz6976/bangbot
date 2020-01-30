@@ -1,4 +1,5 @@
 import subprocess
+import os
 
 
 #   return touch_screen_event(str)
@@ -8,8 +9,13 @@ import subprocess
 #   replaced tail with sed: old devices didn't get it
 #   I/O redirction now compatible with win32
 def find_touchscreen():
-    cmd_string = 'adb shell ' + "getevent -lp | adb shell grep -B 100 ABS_MT_POSITION_X | \
-    adb shell grep '/dev/input/event' | adb shell sed -e 's/^add\ device\ [0-9]\{1,2\}:\ //' | adb shell sed '$!d'"
+    if os.name == 'nt':  # win32
+        cmd_string = "adb shell getevent -lp | adb shell grep -B 100 ABS_MT_POSITION_X | " \
+                     "adb shell grep '/dev/input/event' | adb shell sed -e 's/^add\ device\ [0-9]\{1,2\}:\ //' | " \
+                     "adb shell sed '$!d'"
+    else:  # posix or jvm
+        cmd_string = "adb shell getevent -lp | grep -B 100 ABS_MT_POSITION_X | " \
+                     "grep '/dev/input/event' | sed -e 's/^add device [0-9]\{1,2\}: //' | sed '$!d'"
     res_string = subprocess.check_output(cmd_string, shell=True).decode('utf-8')[:-1]
     return res_string
 
