@@ -13,10 +13,10 @@ logging.basicConfig(level=logging.WARNING)  # change DEBUG to WARNING if not deb
 #   outfile: send output to a file (i.e. sys.stdout)
 #            _res_string = '' when outfile is not None
 #   delay: delay(s) before executing command
-def _worker(stop_activated, cmd_string, outfile=None, delay=0):
+def _worker(stop_activated, cmd_string, outfile=None, delay=0, shell=False):
 	time.sleep(delay)
 	if outfile is None:
-		process = subprocess.Popen(cmd_string.split(), stdout=subprocess.PIPE)
+		process = subprocess.Popen(cmd_string.split(), stdout=subprocess.PIPE, shell=shell)
 	else:
 		process = subprocess.Popen(cmd_string.split(), stdout=outfile)
 	while process.poll() is None:
@@ -46,9 +46,9 @@ def _keypress_listener(stop_activated):
 #   join worker thread: block before worker exit
 #   send args to _worker()
 #   return _res_string changed by _worker()
-def execute_intercept(cmd_string, outfile=None, delay=0):
+def execute_intercept(cmd_string, outfile=None, delay=0, shell=False):
 	stop_activated = threading.Event()
-	thread_worker = threading.Thread(target=_worker, args=(stop_activated, cmd_string, outfile, delay))
+	thread_worker = threading.Thread(target=_worker, args=(stop_activated, cmd_string, outfile, delay, shell))
 	thread_worker.start()
 	kill_listener = threading.Thread(target=_keypress_listener, args=(stop_activated,), daemon=True)
 	kill_listener.start()
@@ -61,9 +61,9 @@ def execute_intercept(cmd_string, outfile=None, delay=0):
 
 #   DOES NOT return
 #   detached threads can not be killed with SIGINT: use kill -9
-def execute_background(cmd_string, outfile=None, delay=0):
+def execute_background(cmd_string, outfile=None, delay=0, shell=False):
 	stop_activated = threading.Event()
-	thread_worker = threading.Thread(target=_worker, args=(stop_activated, cmd_string, outfile, delay))
+	thread_worker = threading.Thread(target=_worker, args=(stop_activated, cmd_string, outfile, delay, shell))
 	thread_worker.start()
 	logging.debug('\n' + cmd_string + ' starting:\n> delay ' + str(delay) + 's \n> kill with kill -9')
 

@@ -36,6 +36,7 @@ def replay(trace, background=False, offset=0, delay=0, release_timeout=0.09):
 		cmd_string += ' -m huawei '
 	if option.debug:
 		cmd_string += ' -v '
+
 	if background:
 		execute_background(cmd_string, delay=delay, outfile=sys.stdout)
 	else:

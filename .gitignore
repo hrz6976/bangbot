@@ -1,2 +1,6 @@
 
 .DS_Store
+__pycache__/adbhelper.cpython-37.pyc
+__pycache__/exec_cmd.cpython-37.pyc
+*.pyc
+*.txt

@@ -5,10 +5,11 @@ import subprocess
 #   ref:https://stackoverflow.com/questions/54228228/adb-how-to-programmatically-determine-which-input-device-is-used-for-sending-to
 #   some older devices does not implement awk
 #   execute in shell: compatibility
-#   f*** awk
+#   replaced tail with sed: old devices didn't get it
+#   I/O redirction now compatible with win32
 def find_touchscreen():
-    cmd_string = 'adb exec-out ' + 'getevent -lp | grep -B 100 ABS_MT_POSITION_X | \
-    grep "/dev/input/event" | sed -e "s/^add device [0-9]\{1,2\}: //" | tail -n 1'
+    cmd_string = 'adb shell ' + "getevent -lp | adb shell grep -B 100 ABS_MT_POSITION_X | \
+    adb shell grep '/dev/input/event' | adb shell sed -e 's/^add\ device\ [0-9]\{1,2\}:\ //' | adb shell sed '$!d'"
     res_string = subprocess.check_output(cmd_string, shell=True).decode('utf-8')[:-1]
     return res_string
 
