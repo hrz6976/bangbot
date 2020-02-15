@@ -172,6 +172,7 @@ int main(int argc, char *argv[])
     bool is_press = false;
     bool is_release = false;
     bool is_first_act = true;
+    bool is_hw_touch = false; // only works for hw devices
     long long corr_offset_sum = 0;
 
     if(wait_for_input){
@@ -211,11 +212,11 @@ int main(int argc, char *argv[])
             }
         } else if (manufacturer == 'h') {
             // huawei
-            // can not use 0x0039 to determine press/release
+            // thanks to @noricks
             if (event.code == (int) 0x014a) {
-                if(event.value == (uint32_t) 0x00000000) {
+                if (event.value == (uint32_t) 0x00000000) {
                     is_release = true;
-                }else{
+                } else if (event.value == (uint32_t) 0x00000001) {
                     is_press = true;
                 }
             }
@@ -249,7 +250,18 @@ int main(int argc, char *argv[])
                 usec_init += offset_final;
             }
 
-            if (is_first_act && is_release){  // time correction: only press/release time is reliable
+//            if(manufacturer == 'h' && is_first_act && release_cnt > 0 && timestamp_prev_release!=-1.0
+//               && timestamp_now - timestamp_prev_release > release_timeout){
+//                printf("[mysendevent] Sendevent begin, press ENTER to stop\n");
+//                is_first_act = false;
+//                // time correction disabled on huawei devices
+//                if(debug)  printf("[%4d] %lf: offset_final=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,offset_final);
+//                usec_init += offset_final;
+//            }
+
+            // time correction: only press/release time is reliable
+            // disabled on huawei devices
+            if (is_first_act && is_release){
                 read(fd, &event, sizeof(event));
                 usec_now = get_usec(&tv);
                 long long corr_offset = (long long)((timestamp_now - timestamp_init) * MICROSEC) - (usec_now - usec_init);
@@ -257,7 +269,6 @@ int main(int argc, char *argv[])
                 corr_offset_sum += corr_offset;
             }
 
-            // update later to avoid cond error (Huawei devices)
             if(is_press){
                 press_cnt++;
                 if(debug) printf("[%4d] %lf: press_cnt=%d, release_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
@@ -271,6 +282,14 @@ int main(int argc, char *argv[])
                 // set timestamp on 1st release
                 timestamp_prev_release = timestamp_now;
             }
+
+//            if(is_hw_touch){
+//                is_hw_touch = false;
+//                timestamp_prev_release = timestamp_now;
+//                if(debug && !is_first_act) printf("[%4d] %lf: got touch\n",(press_cnt+release_cnt+1)/2,timestamp_now);
+//                release_cnt=++press_cnt;
+//            }
+
         }
 
         if(!is_first_act) {
