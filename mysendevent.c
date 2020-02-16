@@ -172,7 +172,6 @@ int main(int argc, char *argv[])
     bool is_press = false;
     bool is_release = false;
     bool is_first_act = true;
-    bool is_hw_touch = false; // only works for hw devices
     long long corr_offset_sum = 0;
 
     if(wait_for_input){
@@ -250,17 +249,7 @@ int main(int argc, char *argv[])
                 usec_init += offset_final;
             }
 
-//            if(manufacturer == 'h' && is_first_act && release_cnt > 0 && timestamp_prev_release!=-1.0
-//               && timestamp_now - timestamp_prev_release > release_timeout){
-//                printf("[mysendevent] Sendevent begin, press ENTER to stop\n");
-//                is_first_act = false;
-//                // time correction disabled on huawei devices
-//                if(debug)  printf("[%4d] %lf: offset_final=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,offset_final);
-//                usec_init += offset_final;
-//            }
-
             // time correction: only press/release time is reliable
-            // disabled on huawei devices
             if (is_first_act && is_release){
                 read(fd, &event, sizeof(event));
                 usec_now = get_usec(&tv);
@@ -268,28 +257,20 @@ int main(int argc, char *argv[])
                 if(debug) printf("[%4d] %lf: corr_offset=%lld(ns)\n",(press_cnt+release_cnt+1)/2,timestamp_now,corr_offset);
                 corr_offset_sum += corr_offset;
             }
+        }
 
-            if(is_press){
-                press_cnt++;
-                if(debug) printf("[%4d] %lf: press_cnt=%d, release_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
-                is_press = false;
-            }
+        if(is_press){
+            press_cnt++;
+            if(debug) printf("[%4d] %lf: press_cnt=%d, release_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
+            is_press = false;
+        }
 
-            if(is_release){
-                release_cnt++;
-                if(debug) printf("[%4d] %lf: release_cnt=%d, press_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
-                is_release = false;  //reset later
-                // set timestamp on 1st release
-                timestamp_prev_release = timestamp_now;
-            }
-
-//            if(is_hw_touch){
-//                is_hw_touch = false;
-//                timestamp_prev_release = timestamp_now;
-//                if(debug && !is_first_act) printf("[%4d] %lf: got touch\n",(press_cnt+release_cnt+1)/2,timestamp_now);
-//                release_cnt=++press_cnt;
-//            }
-
+        if(is_release){
+            release_cnt++;
+            if(debug) printf("[%4d] %lf: release_cnt=%d, press_cnt=%d\n",(press_cnt+release_cnt+1)/2,timestamp_now,press_cnt,release_cnt);
+            is_release = false;  //reset later
+            // set timestamp on 1st release
+            timestamp_prev_release = timestamp_now;
         }
 
         if(!is_first_act) {
